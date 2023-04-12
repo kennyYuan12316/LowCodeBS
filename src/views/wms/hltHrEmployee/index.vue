@@ -1,0 +1,281 @@
+﻿<template>
+	<div class="HSZ-common-layout">
+		<div class="HSZ-common-layout-center">
+			<el-row class="HSZ-common-search-box" :gutter="16">
+				<el-form @submit.native.prevent>
+					<el-col :span="6">
+						<el-form-item label="新工号">
+							<el-input v-model="query.a1" placeholder="新工号" clearable />	
+						</el-form-item>
+					</el-col>
+					<el-col :span="6">
+						<el-form-item label="适配器工号">
+							<el-input v-model="query.a2" placeholder="适配器工号" clearable />	
+						</el-form-item>
+					</el-col>
+					<el-col :span="6">
+						<el-form-item label="嘉扬工号">
+							<el-input v-model="query.a3" placeholder="嘉扬工号" clearable />	
+						</el-form-item>
+					</el-col>
+					<template v-if="showAll">
+					<el-col :span="6">
+						<el-form-item label="勤达工号">
+							<el-input v-model="query.a4" placeholder="勤达工号" clearable />	
+						</el-form-item>
+					</el-col>
+					<el-col :span="6">
+						<el-form-item label="F3工号">
+							<el-input v-model="query.a5" placeholder="F3工号" clearable />	
+						</el-form-item>
+					</el-col>
+					<el-col :span="6">
+						<el-form-item label="在职状态">
+							<el-input v-model="query.a9" placeholder="在职状态" clearable />	
+						</el-form-item>
+					</el-col>
+					<el-col :span="6">
+						<el-form-item label="更新时间">
+							<el-date-picker v-model="query.a10" type="daterange" value-format="timestamp" format="yyyy-MM-dd" start-placeholder="开始日期" end-placeholder="结束日期">
+							</el-date-picker>
+						</el-form-item>
+					</el-col>
+					</template>
+					<el-col :span="6">
+						<el-form-item>
+							<el-button type="primary" icon="el-icon-search" @click="search()">查询</el-button>
+							<el-button icon="el-icon-refresh-right" @click="reset()">重置</el-button>
+							<el-button type="text" icon="el-icon-arrow-down" @click="showAll=true" v-if="!showAll">展开</el-button>
+							<el-button type="text" icon="el-icon-arrow-up" @click="showAll=false" v-else>收起</el-button>
+						</el-form-item>
+					</el-col>
+				</el-form>
+			</el-row>
+			<div class="HSZ-common-layout-main HSZ-flex-main">
+				<div class="HSZ-common-head">
+					<div>
+						<el-button type="primary" icon="el-icon-plus" @click="addOrUpdateHandle()">新增</el-button>
+						<el-button type="text" icon="el-icon-download" @click="exportData()">导出</el-button>
+						<el-button type="text" icon="el-icon-delete" @click="handleBatchRemoveDel()">批量删除</el-button>
+					</div>
+					<div class="HSZ-common-head-right">
+						<el-tooltip effect="dark" content="刷新" placement="top">
+							<el-link icon="icon-sz icon-sz-Refresh HSZ-common-head-icon" :underline="false" @click="reset()" />
+						</el-tooltip>
+						<screenfull isContainer />
+					</div>
+				</div>
+                <HSZ-table v-loading="listLoading" :data="list" has-c @selection-change="handleSelectionChange">
+					<el-table-column prop="a1" label="新工号" align="left" />
+					<el-table-column prop="a2" label="适配器工号" align="left" />
+					<el-table-column prop="a3" label="嘉扬工号" align="left" />
+					<el-table-column prop="a4" label="勤达工号" align="left" />
+					<el-table-column prop="a5" label="F3工号" align="left" />
+					<el-table-column prop="a6" label="姓名" align="left" />
+					<el-table-column prop="a7" label="行政部门" align="left" />
+					<el-table-column prop="a8" label="手机号码" align="left" />
+					<el-table-column prop="a9" label="在职状态" align="left" />
+					<el-table-column prop="a10" label="更新时间" align="left" />
+					<el-table-column label="操作" fixed="right" width="150">
+							<template slot-scope="scope">
+							<el-button type="text" @click="addOrUpdateHandle(scope.row.aid)" >编辑</el-button>
+							<el-button type="text" @click="handleDel(scope.row.aid)" class='HSZ-table-delBtn' >删除</el-button>
+							<el-button type="text" @click="goDetail(scope.row.aid)" >详情</el-button>
+						</template>
+					</el-table-column>
+				</HSZ-table>
+                <pagination :total="total" :page.sync="listQuery.currentPage" :limit.sync="listQuery.pageSize" @pagination="initData" />
+            </div>
+        </div>
+		<HSZ-Form v-if="formVisible" ref="HSZForm" @refresh="refresh" />
+		<ExportBox v-if="exportBoxVisible" ref="ExportBox" @download="download" />
+        <Detail v-if="detailVisible" ref="Detail" @refresh="detailVisible=false"/>
+	</div>
+</template>
+<script>
+	import request from '@/utils/request'
+	import { getDictionaryDataSelector } from '@/api/systemData/dictionary'
+	import HSZForm from './Form'
+	import ExportBox from './ExportBox'
+	import { getDataInterfaceRes } from '@/api/systemData/dataInterface'
+	import Detail from './Detail'
+	export default {
+	    components: { HSZForm, ExportBox, Detail },
+	    data() {
+	        return {
+                detailVisible: false,
+	            showAll: false,
+	        query: {
+	                a1:undefined,
+	                a2:undefined,
+	                a3:undefined,
+	                a4:undefined,
+	                a5:undefined,
+	                a9:undefined,
+	                a10:undefined,
+				},
+                list: [],
+                listLoading: true,
+                multipleSelection: [], 
+				total: 0,
+                listQuery: {
+                    currentPage: 1,
+                    pageSize: 20,
+					sort: "desc",
+                    sidx: "",
+                },
+                formVisible: false,
+                exportBoxVisible: false,
+                columnList: [
+                    { prop: 'a1', label: '新工号' },
+                    { prop: 'a2', label: '适配器工号' },
+                    { prop: 'a3', label: '嘉扬工号' },
+                    { prop: 'a4', label: '勤达工号' },
+                    { prop: 'a5', label: 'F3工号' },
+                    { prop: 'a6', label: '姓名' },
+                    { prop: 'a7', label: '行政部门' },
+                    { prop: 'a8', label: '手机号码' },
+                    { prop: 'a9', label: '在职状态' },
+                    { prop: 'a10', label: '更新时间' },
+				],
+			}
+        },
+		computed: {},
+		created() {
+			this.initData()
+		},
+		methods: {
+            goDetail(id){
+			    this.detailVisible = true
+                this.$nextTick(() => {
+                    this.$refs.Detail.init(id)
+                })
+			},
+			initData() {
+                this.listLoading = true;
+                let _query = {
+                    ...this.listQuery,
+                    ...this.query
+                };
+                let query = {}
+                for (let key in _query) {
+                    if (Array.isArray(_query[key])) {
+                        query[key] = _query[key].join()
+                    } else {
+                        query[key] = _query[key]
+                    }
+                }
+                request({
+                    url: `/api/wms/HltHrEmployee`,
+                    method: 'GET',
+                    data: query
+                }).then(res => {
+                    this.list = res.data.list
+                    this.total = res.data.pagination.total
+                    this.listLoading = false
+                })
+            },
+			handleDel(id) {
+                this.$confirm('此操作将永久删除该数据, 是否继续?', '提示', {
+                    type: 'warning'
+                }).then(() => {
+                    request({
+                        url: `/api/wms/HltHrEmployee/${id}`,
+                        method: 'DELETE'
+                    }).then(res => {
+                        this.$message({
+                            type: 'success',
+                            message: res.msg,
+                            onClose: () => {
+                                this.initData()
+                            }
+                        });
+                    })
+                }).catch(() => {
+                });
+            },
+			handleSelectionChange(val) {
+                const res = val.map(item => item.aid)
+                this.multipleSelection = res
+            },
+            handleBatchRemoveDel() {
+                if (!this.multipleSelection.length) {
+                    this.$message({
+                        type: 'error',
+                        message: '请选择一条数据',
+                        duration: 1500,
+                    })
+                    return
+                }
+                const ids = this.multipleSelection
+                this.$confirm('您确定要删除这些数据吗, 是否继续？', '提示', {
+                    type: 'warning'
+                }).then(() => {
+                    request({
+                        url: `/api/wms/HltHrEmployee/batchRemove`,
+                        method: 'POST',
+                        data: ids ,
+                    }).then(res => {
+                        this.$message({
+                            type: 'success',
+                            message: res.msg,
+                            onClose: () => {
+                                this.initData()
+                            }
+                        });
+                    })
+                }).catch(() => { })
+            },
+			addOrUpdateHandle(id, isDetail) {
+                this.formVisible = true
+                this.$nextTick(() => {
+                    this.$refs.HSZForm.init(id, isDetail)
+                })
+            },
+			exportData() {
+                this.exportBoxVisible = true
+                this.$nextTick(() => {
+                    this.$refs.ExportBox.init(this.columnList)
+                })
+            },
+            download(data) {
+                let query = { ...data, ...this.listQuery, ...this.query }
+                request({
+                    url: `/api/wms/HltHrEmployee/Actions/Export`,
+                    method: 'GET',
+                    data: query
+                }).then(res => {
+                    if (!res.data.url) return
+                    window.location.href = this.define.comUrl + res.data.url
+                    this.$refs.ExportBox.visible = false
+                    this.exportBoxVisible = false
+                })
+            },
+			search() {
+                this.listQuery = {
+                    currentPage: 1,
+                    pageSize: 20,
+                    sort: "desc",
+                    sidx: "aid",
+                }
+                this.initData()
+            },
+            refresh(isrRefresh) {
+                this.formVisible = false
+                if (isrRefresh) this.reset()
+            },
+            reset() {
+                for (let key in this.query) {
+                    this.query[key] = undefined
+                }
+                this.listQuery = {
+                    currentPage: 1,
+                    pageSize: 20,
+                    sort: "desc",
+                    sidx: "aid",
+                }
+                this.initData()
+            }
+		}
+    }
+</script>
